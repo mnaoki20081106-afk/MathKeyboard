@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: macos-15
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,16 +19,17 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
-      # SPMキャッシュ（ビルド時間短縮）
       - name: Cache SPM
         uses: actions/cache@v4
         with:
-          path: |
-            ~/Library/Developer/Xcode/DerivedData
-            .build
+          path: ~/Library/Developer/Xcode/DerivedData
           key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
           restore-keys: |
             ${{ runner.os }}-spm-
+
+      # 利用可能なスキームを確認
+      - name: List schemes
+        run: xcodebuild -project MathKeyboard.xcodeproj -list
 
       # 署名なしでビルド
       - name: Build (unsigned)
@@ -37,13 +38,13 @@ jobs:
             -project MathKeyboard.xcodeproj \
             -scheme MathKeyboardApp \
             -configuration Release \
-            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
             -derivedDataPath "${{ github.workspace }}/DerivedData" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             EXPANDED_CODE_SIGN_IDENTITY="" \
-            | xcpretty || true
+            build
 
       # ビルド結果を確認
       - name: Find .app
@@ -61,7 +62,6 @@ jobs:
           zip -r MathKeyboard.ipa Payload
           echo "IPA size: $(ls -lh MathKeyboard.ipa)"
 
-      # IPAをアーティファクトとしてアップロード
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
