@@ -7,14 +7,14 @@ on:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-14
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.app
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
 
       - name: Show Xcode version
         run: xcodebuild -version
@@ -23,7 +23,7 @@ jobs:
       - name: List Schemes
         run: xcodebuild -list -project MathKeyboard.xcodeproj
 
-      # 依存関係の解決をより確実に行う
+      # 依存関係の解決
       - name: Resolve Package Dependencies
         run: |
           xcodebuild -resolvePackageDependencies \
@@ -39,8 +39,6 @@ jobs:
             ${{ runner.os }}-spm-
 
       # 署名なしでビルド
-      # ライブラリが見つからない問題を解決するため、SDKを明示的に指定せず、
-      # かつ実機向け(iphoneos)に戻してビルドします
       - name: Build (unsigned)
         run: |
           xcodebuild \
@@ -54,7 +52,6 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             EXPANDED_CODE_SIGN_IDENTITY="" \
             IPHONEOS_DEPLOYMENT_TARGET=16.0 \
-            COMPILER_INDEX_STORE_ENABLE=NO \
             build
 
       # .app を Payload に入れてIPA化
