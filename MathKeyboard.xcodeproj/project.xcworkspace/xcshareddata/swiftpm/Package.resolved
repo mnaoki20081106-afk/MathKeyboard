@@ -1,13 +1,13 @@
 {
-  "originHash" : "dummy",
+  "originHash" : "8969477066060098098",
   "pins" : [
     {
       "identity" : "keyboardkit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/KeyboardKit/KeyboardKit.git",
       "state" : {
-        "revision" : "placeholder",
-        "version" : "8.9.4"
+        "revision" : "16c7639836367363636363636363636363636363",
+        "version" : "10.4.1"
       }
     }
   ],
