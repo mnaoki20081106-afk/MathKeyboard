@@ -19,8 +19,15 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
+      # スキームが存在しない場合に備えて、ターゲットからスキームを自動生成する
       - name: Resolve Package Dependencies
-        run: xcodebuild -resolvePackageDependencies -project MathKeyboard.xcodeproj -scheme MathKeyboard
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project MathKeyboard.xcodeproj \
+            -scheme MathKeyboardApp || \
+          xcodebuild -resolvePackageDependencies \
+            -project MathKeyboard.xcodeproj \
+            -alltargets
 
       - name: Cache SPM
         uses: actions/cache@v4
@@ -30,12 +37,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-spm-
 
-      # 署名なしでビルド
+      # 共有スキームがない場合でもビルドできるように、ターゲットを直接指定してビルド
       - name: Build (unsigned)
         run: |
           xcodebuild \
             -project MathKeyboard.xcodeproj \
-            -scheme MathKeyboard \
+            -target MathKeyboardApp \
             -configuration Release \
             -destination "generic/platform=iOS" \
             -derivedDataPath "${{ github.workspace }}/DerivedData" \
@@ -50,6 +57,10 @@ jobs:
         run: |
           APP_PATH=$(find "${{ github.workspace }}/DerivedData" -name "MathKeyboardApp.app" -type d | grep -v "Package" | head -n 1)
           echo "Found .app at: $APP_PATH"
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: MathKeyboardApp.app not found"
+            exit 1
+          fi
           mkdir -p Payload
           cp -r "$APP_PATH" Payload/MathKeyboardApp.app
           zip -r MathKeyboard.ipa Payload
