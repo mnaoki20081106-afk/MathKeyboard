@@ -19,15 +19,16 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
-      # スキームが存在しない場合に備えて、ターゲットからスキームを自動生成する
+      # プロジェクトを読み込ませてスキームを自動生成させる
+      - name: List Schemes
+        run: xcodebuild -list -project MathKeyboard.xcodeproj
+
+      # 依存関係の解決
       - name: Resolve Package Dependencies
         run: |
           xcodebuild -resolvePackageDependencies \
             -project MathKeyboard.xcodeproj \
-            -scheme MathKeyboardApp || \
-          xcodebuild -resolvePackageDependencies \
-            -project MathKeyboard.xcodeproj \
-            -alltargets
+            -scheme MathKeyboardApp
 
       - name: Cache SPM
         uses: actions/cache@v4
@@ -37,12 +38,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-spm-
 
-      # 共有スキームがない場合でもビルドできるように、ターゲットを直接指定してビルド
+      # 署名なしでビルド
       - name: Build (unsigned)
         run: |
           xcodebuild \
             -project MathKeyboard.xcodeproj \
-            -target MathKeyboardApp \
+            -scheme MathKeyboardApp \
             -configuration Release \
             -destination "generic/platform=iOS" \
             -derivedDataPath "${{ github.workspace }}/DerivedData" \
