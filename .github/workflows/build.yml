@@ -1,4 +1,4 @@
-Name: Build MathKeyboard IPA
+name: Build MathKeyboard IPA
 
 on:
   push:
@@ -30,7 +30,7 @@ jobs:
             -project MathKeyboard.xcodeproj \
             -scheme MathKeyboardApp
 
-      # --- ここから修正：ターゲットの依存関係を強制的に紐付ける ---
+      # ターゲットの依存関係を強制的に紐付ける
       - name: Inject KeyboardKit Dependency to Extension
         run: |
           sudo gem install xcodeproj
@@ -40,7 +40,6 @@ jobs:
           project_path = 'MathKeyboard.xcodeproj'
           project = Xcodeproj::Project.open(project_path)
           
-          # 1. ターゲットを取得
           ext_target = project.targets.find { |t| t.name == 'MathKeyboardExtension' }
           
           if ext_target.nil?
@@ -48,7 +47,6 @@ jobs:
             exit 1
           end
 
-          # 2. Package Referenceを探す
           pkg_ref = project.root_object.package_references.find { |ref| ref.repositoryURL&.include?('KeyboardKit') }
           
           if pkg_ref.nil?
@@ -56,8 +54,6 @@ jobs:
             exit 1
           end
 
-          # 3. Swift Package Product Dependencyを作成
-          # すでに存在するかチェック
           product_dep = ext_target.package_product_dependencies.find { |dep| dep.product_name == 'KeyboardKit' }
           
           if product_dep.nil?
@@ -65,23 +61,19 @@ jobs:
             product_dep.product_name = 'KeyboardKit'
             product_dep.package = pkg_ref
             ext_target.package_product_dependencies << product_dep
-            puts "Created new product dependency for KeyboardKit."
           end
 
-          # 4. Frameworks Build Phaseに登録 (これがないとimportできない)
           frameworks_phase = ext_target.frameworks_build_phase
           unless frameworks_phase.files.any? { |f| f.product_ref == product_dep }
             build_file = project.new(Xcodeproj::Project::Object::PBXBuildFile)
             build_file.product_ref = product_dep
             frameworks_phase.files << build_file
-            puts "Linked KeyboardKit to MathKeyboardExtension frameworks phase."
           end
 
           project.save
           puts "Successfully updated MathKeyboard.xcodeproj"
           EOF
           ruby fix_pbxproj.rb
-      # --- ここまで修正 ---
 
       - name: Cache SPM
         uses: actions/cache@v4
