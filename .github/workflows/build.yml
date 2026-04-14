@@ -27,10 +27,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-spm-
 
-      # 利用可能なスキームを確認
-      - name: List schemes
-        run: xcodebuild -project MathKeyboard.xcodeproj -list
-
       # 署名なしでビルド
       - name: Build (unsigned)
         run: |
@@ -45,12 +41,6 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             EXPANDED_CODE_SIGN_IDENTITY="" \
             build
-
-      # ビルド結果を確認
-      - name: Find .app
-        run: |
-          echo "=== DerivedData 以下の .app を検索 ==="
-          find "${{ github.workspace }}/DerivedData" -name "*.app" -type d
 
       # .app を Payload に入れてIPA化
       - name: Package IPA
