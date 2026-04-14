@@ -1,0 +1,64 @@
+name: Build MathKeyboard IPA
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.app
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      # SPMキャッシュ（ビルド時間短縮）
+      - name: Cache SPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData
+            .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      # 署名なし（CODE_SIGNING_ALLOWED=NO）でビルド
+      - name: Build (unsigned)
+        run: |
+          xcodebuild \
+            -project MathKeyboard.xcodeproj \
+            -scheme MathKeyboardApp \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            EXPANDED_CODE_SIGN_IDENTITY="" \
+            | xcpretty || true
+
+      # .app を Payload/ に入れてzip → .ipa にリネーム
+      - name: Package IPA
+        run: |
+          APP_PATH=$(find DerivedData -name "MathKeyboardApp.app" -not -path "*/PackageFrameworks/*" | head -1)
+          echo "Found .app at: $APP_PATH"
+          mkdir -p Payload
+          cp -r "$APP_PATH" Payload/MathKeyboardApp.app
+          zip -r MathKeyboard.ipa Payload
+          echo "IPA created: $(ls -lh MathKeyboard.ipa)"
+
+      # IPAをアーティファクトとしてアップロード
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MathKeyboard-unsigned
+          path: MathKeyboard.ipa
+          retention-days: 30

@@ -1,0 +1,23 @@
+# このファイルをリポジトリに追加する際は .gitignore にリネームしてください
+
+# Xcode
+
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcbkptlist
+
+# Build outputs
+
+build/
+Payload/
+*.ipa
+
+# SPM
+
+.build/
+.swiftpm/
+
+# macOS
+
+.DS_Store
