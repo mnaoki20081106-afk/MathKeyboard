@@ -39,23 +39,26 @@ jobs:
             ${{ runner.os }}-spm-
 
       # 署名なしでビルド
+      # SDKが見つからないエラーを回避するため、iOS Simulatorをターゲットにします
       - name: Build (unsigned)
         run: |
           xcodebuild \
             -project MathKeyboard.xcodeproj \
             -scheme MathKeyboardApp \
             -configuration Release \
-            -destination "generic/platform=iOS" \
+            -destination "generic/platform=iOS Simulator" \
             -derivedDataPath "${{ github.workspace }}/DerivedData" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             EXPANDED_CODE_SIGN_IDENTITY="" \
+            IPHONEOS_DEPLOYMENT_TARGET=16.0 \
             build
 
       # .app を Payload に入れてIPA化
       - name: Package IPA
         run: |
+          # Simulatorビルドの場合、パスが Release-iphonesimulator になります
           APP_PATH=$(find "${{ github.workspace }}/DerivedData" -name "MathKeyboardApp.app" -type d | grep -v "Package" | head -n 1)
           echo "Found .app at: $APP_PATH"
           if [ -z "$APP_PATH" ]; then
