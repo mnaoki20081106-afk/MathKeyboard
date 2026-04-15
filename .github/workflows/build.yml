@@ -23,15 +23,8 @@ jobs:
       - name: List Schemes
         run: xcodebuild -list -project MathKeyboard.xcodeproj
 
-      # 依存関係の解決
-      - name: Resolve Package Dependencies
-        run: |
-          xcodebuild -resolvePackageDependencies \
-            -project MathKeyboard.xcodeproj \
-            -scheme MathKeyboardApp
-
-      # ターゲットの依存関係を強制的に紐付ける
-      - name: Inject KeyboardKit Dependency to Extension
+      # --- 修正：パッケージ解決の【前】にプロジェクトを書き換える ---
+      - name: Fix Xcode Project (Link KeyboardKit & Force v7)
         run: |
           sudo gem install xcodeproj
           cat << 'EOF' > fix_pbxproj.rb
@@ -41,21 +34,27 @@ jobs:
           project = Xcodeproj::Project.open(project_path)
           
           ext_target = project.targets.find { |t| t.name == 'MathKeyboardExtension' }
-          
           if ext_target.nil?
             puts "Error: MathKeyboardExtension target not found!"
             exit 1
           end
 
-          pkg_ref = project.root_object.package_references.find { |ref| ref.repositoryURL&.include?('KeyboardKit') }
-          
+          # KeyboardKitのパッケージ参照を探す
+          pkg_ref = project.root_object.package_references.find { |ref| ref.repositoryURL&.downcase&.include?('keyboardkit') }
           if pkg_ref.nil?
             puts "Error: KeyboardKit package reference not found in project!"
             exit 1
           end
 
+          # 【追加】バージョンを強制的に7系（7.9.2）にダウングレードする
+          pkg_ref.requirement = {
+            'kind' => 'upToNextMajorVersion',
+            'minimumVersion' => '7.9.2'
+          }
+          puts "Forced KeyboardKit version to 7.9.2"
+
+          # KeyboardKitをターゲットに紐付け
           product_dep = ext_target.package_product_dependencies.find { |dep| dep.product_name == 'KeyboardKit' }
-          
           if product_dep.nil?
             product_dep = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
             product_dep.product_name = 'KeyboardKit'
@@ -63,6 +62,7 @@ jobs:
             ext_target.package_product_dependencies << product_dep
           end
 
+          # Frameworks Build Phaseに登録
           frameworks_phase = ext_target.frameworks_build_phase
           unless frameworks_phase.files.any? { |f| f.product_ref == product_dep }
             build_file = project.new(Xcodeproj::Project::Object::PBXBuildFile)
@@ -74,6 +74,17 @@ jobs:
           puts "Successfully updated MathKeyboard.xcodeproj"
           EOF
           ruby fix_pbxproj.rb
+
+      # V8のキャッシュが残っている可能性があるので念のため削除
+      - name: Clear Package Resolved
+        run: rm -f MathKeyboard.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
+      # 依存関係の解決 (ここで自動的にv7.9.2がダウンロードされます)
+      - name: Resolve Package Dependencies
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project MathKeyboard.xcodeproj \
+            -scheme MathKeyboardApp
 
       - name: Cache SPM
         uses: actions/cache@v4
