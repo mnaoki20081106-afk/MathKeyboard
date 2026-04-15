@@ -19,42 +19,32 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
-      # プロジェクトを読み込ませてスキームを自動生成させる
       - name: List Schemes
         run: xcodebuild -list -project MathKeyboard.xcodeproj
 
-      # --- 修正：パッケージ解決の【前】にプロジェクトを書き換える ---
-      - name: Fix Xcode Project (Link KeyboardKit & Force v7)
+      # 必要なら「リンクだけ」直す。バージョンは絶対に上書きしない
+      - name: Fix Xcode Project (link KeyboardKit only)
         run: |
           sudo gem install xcodeproj
           cat << 'EOF' > fix_pbxproj.rb
           require 'xcodeproj'
-          
+
           project_path = 'MathKeyboard.xcodeproj'
           project = Xcodeproj::Project.open(project_path)
-          
+
           ext_target = project.targets.find { |t| t.name == 'MathKeyboardExtension' }
-          if ext_target.nil?
-            puts "Error: MathKeyboardExtension target not found!"
-            exit 1
-          end
+          abort("MathKeyboardExtension target not found") if ext_target.nil?
 
-          # KeyboardKitのパッケージ参照を探す
-          pkg_ref = project.root_object.package_references.find { |ref| ref.repositoryURL&.downcase&.include?('keyboardkit') }
-          if pkg_ref.nil?
-            puts "Error: KeyboardKit package reference not found in project!"
-            exit 1
-          end
-
-          # 【追加】バージョンを強制的に7系（7.9.2）にダウングレードする
-          pkg_ref.requirement = {
-            'kind' => 'upToNextMajorVersion',
-            'minimumVersion' => '7.9.2'
+          pkg_ref = project.root_object.package_references.find { |ref|
+            ref.repositoryURL&.downcase&.include?('keyboardkit')
           }
-          puts "Forced KeyboardKit version to 7.9.2"
+          abort("KeyboardKit package reference not found") if pkg_ref.nil?
 
-          # KeyboardKitをターゲットに紐付け
-          product_dep = ext_target.package_product_dependencies.find { |dep| dep.product_name == 'KeyboardKit' }
+          # ここでバージョンは変更しない
+          product_dep = ext_target.package_product_dependencies.find { |dep|
+            dep.product_name == 'KeyboardKit'
+          }
+
           if product_dep.nil?
             product_dep = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
             product_dep.product_name = 'KeyboardKit'
@@ -62,7 +52,6 @@ jobs:
             ext_target.package_product_dependencies << product_dep
           end
 
-          # Frameworks Build Phaseに登録
           frameworks_phase = ext_target.frameworks_build_phase
           unless frameworks_phase.files.any? { |f| f.product_ref == product_dep }
             build_file = project.new(Xcodeproj::Project::Object::PBXBuildFile)
@@ -71,30 +60,27 @@ jobs:
           end
 
           project.save
-          puts "Successfully updated MathKeyboard.xcodeproj"
+          puts "Successfully updated MathKeyboard.xcodeproj without changing package version"
           EOF
           ruby fix_pbxproj.rb
 
-      # V8のキャッシュが残っている可能性があるので念のため削除
-      - name: Clear Package Resolved
-        run: rm -f MathKeyboard.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+      # Package.resolved は消さない
+      # 代わりにキャッシュを軽く掃除
+      - name: Clear stale SPM caches
+        run: |
+          rm -rf ~/Library/Caches/org.swift.swiftpm || true
+          rm -rf ~/Library/org.swift.swiftpm || true
+          rm -rf "${{ github.workspace }}/DerivedData" || true
 
-      # 依存関係の解決 (ここで自動的にv7.9.2がダウンロードされます)
       - name: Resolve Package Dependencies
         run: |
           xcodebuild -resolvePackageDependencies \
             -project MathKeyboard.xcodeproj \
             -scheme MathKeyboardApp
 
-      - name: Cache SPM
-        uses: actions/cache@v4
-        with:
-          path: ~/Library/Developer/Xcode/DerivedData
-          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
-          restore-keys: |
-            ${{ runner.os }}-spm-
+      # まずは cache を外して安定確認した方が安全
+      # 必要なら後で戻す
 
-      # 署名なしでビルド
       - name: Build (unsigned)
         run: |
           xcodebuild \
@@ -110,7 +96,6 @@ jobs:
             IPHONEOS_DEPLOYMENT_TARGET=16.0 \
             build
 
-      # .app を Payload に入れてIPA化
       - name: Package IPA
         run: |
           APP_PATH=$(find "${{ github.workspace }}/DerivedData" -name "MathKeyboardApp.app" -type d | grep -v "Package" | head -n 1)
@@ -122,7 +107,6 @@ jobs:
           mkdir -p Payload
           cp -r "$APP_PATH" Payload/MathKeyboardApp.app
           zip -r MathKeyboard.ipa Payload
-          echo "IPA size: $(ls -lh MathKeyboard.ipa)"
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
